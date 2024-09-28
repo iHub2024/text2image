@@ -8,7 +8,7 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-EXPOSE 8000
+EXPOSE 8081
 
-# Start the app using Gunicorn with 4 workers, binding to port 8000, and setting a 300-second timeout
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8000", "app:app", "--timeout", "300"]
+# Start the app using Gunicorn with 4 workers, binding to port 8081, and setting a 300-second timeout
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8081", "app:app", "--timeout", "300"]
