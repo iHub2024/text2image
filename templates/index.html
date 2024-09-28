@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iHub Khmer Text to Image</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href='https://fonts.googleapis.com/css?family=Khmer' rel='stylesheet'>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body class="container py-4">
+    <h1>iHub Text to Image</h1>
+    <div class="d-inline-flex p-2 bd-highlight" style="color: red; font-family: Moul;font-size: 100%;">
+        អាយហាប់ តិច ធូ អ៊ីមមិច
+    </div>
+
+    <!-- Form to upload the Excel file -->
+    <form id="upload-form" enctype="multipart/form-data">
+        <label for="file">Select Excel file:</label>
+        <input type="file" id="file" name="file" accept=".xlsx">
+        <button type="button" id="upload-btn">Upload File</button>
+    </form>
+
+    <!-- Container that will have dynamic content -->
+    <div id="capture-container" class="d-inline-flex p-1 bd-highlight" style="margin:0px">
+        <span id="dynamic-content">ពាក្យត្រូវបំលែងជារូប</span>
+    </div>
+    <br>
+    <!-- Button to start capturing -->
+    <button id="capture-all-btn" disabled>Capture All Contents</button>
+
+    <!-- Button to create and download zip -->
+    <button id="download-zip-btn" style="display: none;">Download Captured Images and Text as Zip</button>
+
+    <p id="status"></p>
+
+    <script>
+        let contentList = [];  // Store content from Excel
+        let zipFilename = '';  // Store the generated zip filename
+
+        // Upload Excel file and extract content
+        document.getElementById('upload-btn').addEventListener('click', async function() {
+            const fileInput = document.getElementById('file');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            // Upload the file to the Flask server
+            const response = await fetch('/upload-excel', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.message === 'File uploaded successfully') {
+                contentList = data.content;  // Store the content from Excel
+                document.getElementById('status').innerText = 'File uploaded successfully. Ready to capture.';
+                document.getElementById('capture-all-btn').disabled = false;  // Enable the capture button
+            } else {
+                document.getElementById('status').innerText = 'File upload failed.';
+            }
+        });
+
+        async function captureContent(content, index) {
+            document.getElementById('dynamic-content').innerText = content.text;
+            document.getElementById('capture-container').setAttribute('style', content.style);
+
+            // Wait for html2canvas to render the canvas
+            const canvas = await html2canvas(document.getElementById('capture-container'));
+
+            // Convert the canvas to a data URL (base64 encoded)
+            const imageData = canvas.toDataURL('image/jpeg');  // Capture as JPEG
+
+            // Send the image data, index, and content text to the Flask server
+            const response = await fetch('/capture-page', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    imageData: imageData,
+                    index: index,
+                    text: content.text
+                })
+            });
+
+            // Parse the JSON response
+            const data = await response.json();
+
+            // Return the response message
+            return data.message;
+        }
+
+        document.getElementById('capture-all-btn').addEventListener('click', async function() {
+            // Disable the button to prevent multiple clicks
+            document.getElementById('capture-all-btn').disabled = true;
+
+            // Capture each content one by one
+            for (let i = 0; i < contentList.length; i++) {
+                const message = await captureContent(contentList[i], i);
+                // Update the status with each message
+                document.getElementById('status').innerText += `\n${message} - Image ${i + 1} and text saved.`;
+            }
+
+            // Create a zip file of the captured images and text files
+            const zipResponse = await fetch('/create-zip', {
+                method: 'POST'
+            });
+
+            const zipData = await zipResponse.json();
+            if (zipData.message === 'Zip file created successfully') {
+                document.getElementById('status').innerText += '\nZip file created successfully.';
+                zipFilename = zipData.zip_path;  // Store the zip path
+                document.getElementById('download-zip-btn').style.display = 'block';  // Show the download button
+            }
+
+            // Re-enable the button after all captures are done
+            document.getElementById('capture-all-btn').disabled = false;
+        });
+
+        // Download the zip file
+        document.getElementById('download-zip-btn').addEventListener('click', function() {
+            window.location.href = `/download-zip?zipfile=${zipFilename.split('/').pop()}`;
+        });
+    </script>
+</body>
+</html>
